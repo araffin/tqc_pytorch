@@ -85,14 +85,15 @@ class ReplayBuffer(object):
 
 
 class Critic(Module):
-    def __init__(self, state_dim, action_dim, n_quantiles, n_nets):
+    def __init__(self, state_dim, action_dim, n_quantiles, n_nets, critic_arch=None):
         super().__init__()
         self.nets = []
         self.n_quantiles = n_quantiles
         self.n_nets = n_nets
+        if critic_arch is None:
+            critic_arch = [512, 512, 512]
         for i in range(n_nets):
-            net = Mlp(state_dim + action_dim, [512, 512, 512], n_quantiles)
-            # net = Mlp(state_dim + action_dim, [256, 256], n_quantiles)
+            net = Mlp(state_dim + action_dim, critic_arch, n_quantiles)
             self.add_module(f'qf{i}', net)
             self.nets.append(net)
 

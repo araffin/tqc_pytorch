@@ -18,7 +18,7 @@ from tqc.functions import eval_policy
 EPISODE_LENGTH = 1000
 
 
-def main(args, results_dir, models_dir, prefix):
+def main(args, results_dir, models_dir, prefix, critic_arch=None, buffer_size=int(1e6)):
     # --- Init ---
 
     # remove TimeLimit
@@ -31,9 +31,9 @@ def main(args, results_dir, models_dir, prefix):
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
 
-    replay_buffer = structures.ReplayBuffer(state_dim, action_dim)
+    replay_buffer = structures.ReplayBuffer(state_dim, action_dim, max_size=buffer_size)
     actor = Actor(state_dim, action_dim).to(DEVICE)
-    critic = Critic(state_dim, action_dim, args.n_quantiles, args.n_nets).to(DEVICE)
+    critic = Critic(state_dim, action_dim, args.n_quantiles, args.n_nets, critic_arch).to(DEVICE)
     critic_target = copy.deepcopy(critic)
 
     top_quantiles_to_drop = args.top_quantiles_to_drop_per_net * args.n_nets
@@ -81,6 +81,7 @@ def main(args, results_dir, models_dir, prefix):
         if (t + 1) % args.eval_freq == 0:
             file_name = f"{prefix}_{args.env}_{args.seed}"
             evaluations.append(eval_policy(actor, eval_env, EPISODE_LENGTH))
+            print(f"Mean eval reward: {evaluations[-1]:.2f}")
             np.save(results_dir / file_name, evaluations)
             if args.save_model: trainer.save(models_dir / file_name)
 
@@ -92,7 +93,9 @@ if __name__ == "__main__":
     parser.add_argument("--max_timesteps", default=1e6, type=int)   # Max time steps to run environment
     parser.add_argument("--seed", default=0, type=int)
     parser.add_argument("--n_quantiles", default=25, type=int)
+    parser.add_argument("--buffer_size", default=int(1e6), type=int)
     parser.add_argument("--top_quantiles_to_drop_per_net", default=2, type=int)
+    parser.add_argument("--critic_arch", default=[512, 512, 512], type=int, nargs='+')
     parser.add_argument("--n_nets", default=2, type=int)
     parser.add_argument("--batch_size", default=256, type=int)      # Batch size for both actor and critic
     parser.add_argument("--discount", default=0.99, type=float)                 # Discount factor
@@ -112,4 +115,4 @@ if __name__ == "__main__":
     if args.save_model and not os.path.exists(models_dir):
         os.makedirs(models_dir)
 
-    main(args, results_dir, models_dir, args.prefix)
+    main(args, results_dir, models_dir, args.prefix, args.critic_arch, args.buffer_size)
