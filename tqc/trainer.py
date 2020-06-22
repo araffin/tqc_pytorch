@@ -37,7 +37,14 @@ class Trainer(object):
 
 	def train(self, replay_buffer, batch_size=256):
 		state, action, next_state, reward, not_done = replay_buffer.sample(batch_size)
-		alpha = torch.exp(self.log_alpha)
+		alpha = torch.exp(self.log_alpha).detach()
+
+		new_action, log_pi = self.actor(state)
+		alpha_loss = -(self.log_alpha * (log_pi + self.target_entropy).detach()).mean()
+
+		self.alpha_optimizer.zero_grad()
+		alpha_loss.backward()
+		self.alpha_optimizer.step()
 
 		# --- Q loss ---
 		with torch.no_grad():
@@ -55,26 +62,21 @@ class Trainer(object):
 		cur_z = self.critic(state, action)
 		critic_loss = quantile_huber_loss_f(cur_z, target)
 
-		# --- Policy and alpha loss ---
-		new_action, log_pi = self.actor(state)
-		alpha_loss = -self.log_alpha * (log_pi + self.target_entropy).detach().mean()
-		actor_loss = (alpha * log_pi - self.critic(state, new_action).mean(2).mean(1, keepdim=True)).mean()
-
 		# --- Update ---
 		self.critic_optimizer.zero_grad()
 		critic_loss.backward()
 		self.critic_optimizer.step()
 
-		for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
-			target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+		# --- Policy and alpha loss ---
+		actor_loss = (alpha * log_pi - self.critic(state, new_action).mean(2).mean(1, keepdim=True)).mean()
 
 		self.actor_optimizer.zero_grad()
 		actor_loss.backward()
 		self.actor_optimizer.step()
 
-		self.alpha_optimizer.zero_grad()
-		alpha_loss.backward()
-		self.alpha_optimizer.step()
+		for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
+			target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+
 
 		self.total_it += 1
 

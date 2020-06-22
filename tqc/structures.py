@@ -92,6 +92,7 @@ class Critic(Module):
         self.n_nets = n_nets
         for i in range(n_nets):
             net = Mlp(state_dim + action_dim, [512, 512, 512], n_quantiles)
+            # net = Mlp(state_dim + action_dim, [256, 256], n_quantiles)
             self.add_module(f'qf{i}', net)
             self.nets.append(net)
 
